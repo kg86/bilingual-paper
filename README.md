@@ -15,6 +15,9 @@ uv run bilingual-paper arxiv 2307.01412
 uv run bilingual-paper arxiv https://arxiv.org/abs/2307.01412v4
 uv run bilingual-paper arxiv path/to/saved-arxiv-page.html --target-lang ko
 uv run python -m unittest discover -s tests -v
+uv run ruff check .
+uv run ruff format .
+uv run pyright
 ```
 
 `SOURCE` may be a bare arXiv ID, an `arxiv.org/abs|pdf|html/...` URL (fetched directly from arXiv), or a local

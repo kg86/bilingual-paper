@@ -24,4 +24,14 @@ where = ["src"]
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",
+    "ruff>=0.14.0",
+    "pyright>=1.1.406",
 ]
+
+[tool.ruff]
+src = ["src"]
+
+[tool.pyright]
+include = ["src", "tests"]
+venvPath = "."
+venv = ".venv"

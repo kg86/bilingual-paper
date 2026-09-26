@@ -19,7 +19,8 @@ import urllib.request
 from html import escape
 from pathlib import Path
 
-from bs4 import BeautifulSoup, NavigableString, Tag
+from bs4 import BeautifulSoup, Tag
+from bs4.element import NavigableString
 
 from . import gemini
 from .languages import DEFAULT_LANG, LANGUAGES, language_name, text_direction
@@ -28,8 +29,12 @@ TOKEN_RE = re.compile(r"@@(\d+)@@")  # @@N@@
 ARXIV_ID_RE = re.compile(r"(\d{4}\.\d{4,5})(v\d+)?")
 # The paper's own ID in a saved arXiv HTML page: the "arXiv:<id> [cs.XX] <date>" watermark, or an
 # arxiv.org link. Only the part before <article> is searched, so IDs cited in the body are ignored.
-WATERMARK_ID_RE = re.compile(r'id="watermark-tr"[^>]*>\s*arXiv:(\d{4}\.\d{4,5}(?:v\d+)?)')
-PAGE_ID_RE = re.compile(r"(?:arXiv:|arxiv\.org/(?:abs|html|pdf)/)(\d{4}\.\d{4,5}(?:v\d+)?)", re.IGNORECASE)
+WATERMARK_ID_RE = re.compile(
+    r'id="watermark-tr"[^>]*>\s*arXiv:(\d{4}\.\d{4,5}(?:v\d+)?)'
+)
+PAGE_ID_RE = re.compile(
+    r"(?:arXiv:|arxiv\.org/(?:abs|html|pdf)/)(\d{4}\.\d{4,5}(?:v\d+)?)", re.IGNORECASE
+)
 ARXIV_HTML_BASE_HREF = "https://arxiv.org/html/"
 CHECKPOINT_SCHEMA = "arxiv-bilingual-translations/v1"
 # Units whose placeholder tokens are cosmetic numbering (section numbers, footnote marks) that the
@@ -48,13 +53,17 @@ def detect_arxiv_id_in_page(html_text: str) -> str | None:
     if match:
         return match.group(1)
     article_start = html_text.find("<article")
-    match = PAGE_ID_RE.search(html_text if article_start < 0 else html_text[:article_start])
+    match = PAGE_ID_RE.search(
+        html_text if article_start < 0 else html_text[:article_start]
+    )
     return match.group(1) if match else None
 
 
 def fetch_arxiv_html(arxiv_id: str) -> str:
     url = f"{ARXIV_HTML_BASE_HREF}{arxiv_id}"
-    request = urllib.request.Request(url, headers={"User-Agent": "bilingual-paper/1.0 (research tool)"})
+    request = urllib.request.Request(
+        url, headers={"User-Agent": "bilingual-paper/1.0 (research tool)"}
+    )
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
             return response.read().decode("utf-8")
@@ -93,7 +102,11 @@ def is_opaque(tag: Tag) -> bool:
     classes = tag.get("class") or []
     # Footnotes (ltx_note) are inline spans holding the whole footnote body; keep them out of the
     # surrounding sentence -- their content is translated as its own unit.
-    return "ltx_note" in classes or "ltx_note_mark" in classes or any("ltx_tag" in c for c in classes)
+    return (
+        "ltx_note" in classes
+        or "ltx_note_mark" in classes
+        or any("ltx_tag" in c for c in classes)
+    )
 
 
 def strip_ids(tag: Tag) -> str:
@@ -131,7 +144,9 @@ def extract_segment(tag: Tag) -> tuple[str, dict[str, str]]:
 def collect_units(soup: BeautifulSoup) -> list[dict]:
     article = soup.find("article")
     if article is None:
-        raise ValueError("No <article> element found; is this an arXiv (LaTeXML) HTML paper page?")
+        raise ValueError(
+            "No <article> element found; is this an arXiv (LaTeXML) HTML paper page?"
+        )
     units: list[dict] = []
     seen: set[int] = set()
 
@@ -179,7 +194,9 @@ def collect_units(soup: BeautifulSoup) -> list[dict]:
     return units
 
 
-def load_checkpoint(units: list[dict], checkpoint_path: Path, target_lang: str) -> dict[str, str]:
+def load_checkpoint(
+    units: list[dict], checkpoint_path: Path, target_lang: str
+) -> dict[str, str]:
     """Return {unit id: translation} for saved translations whose English still matches the unit."""
     if not checkpoint_path.exists():
         return {}
@@ -203,17 +220,28 @@ def load_checkpoint(units: list[dict], checkpoint_path: Path, target_lang: str) 
         else:
             stale += 1
     if stale:
-        print(f"warning: ignoring {stale} saved translation(s) whose English source no longer matches", file=sys.stderr)
+        print(
+            f"warning: ignoring {stale} saved translation(s) whose English source no longer matches",
+            file=sys.stderr,
+        )
     return done
 
 
-def save_checkpoint(checkpoint_path: Path, units: list[dict], done: dict[str, str], target_lang: str) -> None:
+def save_checkpoint(
+    checkpoint_path: Path, units: list[dict], done: dict[str, str], target_lang: str
+) -> None:
     payload = {
         "schema": CHECKPOINT_SCHEMA,
         "target_lang": target_lang,
-        "units": {u["id"]: {"english": u["english"], "translation": done[u["id"]]} for u in units if u["id"] in done},
+        "units": {
+            u["id"]: {"english": u["english"], "translation": done[u["id"]]}
+            for u in units
+            if u["id"] in done
+        },
     }
-    checkpoint_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    checkpoint_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
 
 
 def build_instructions(target_lang: str) -> str:
@@ -238,7 +266,10 @@ SCHEMA = {
             "type": "array",
             "items": {
                 "type": "object",
-                "properties": {"id": {"type": "string"}, "translation": {"type": "string"}},
+                "properties": {
+                    "id": {"type": "string"},
+                    "translation": {"type": "string"},
+                },
                 "required": ["id", "translation"],
             },
         }
@@ -265,13 +296,18 @@ def retry_instructions(target_lang: str) -> str:
     )
 
 
-def translate_single(api, model: str, unit: dict, target_lang: str, attempts: int = 3) -> str:
+def translate_single(
+    api, model: str, unit: dict, target_lang: str, attempts: int = 3
+) -> str:
     translation = ""
     for _ in range(attempts):
         payload = [{"id": unit["id"], "english": unit["english"]}]
         response = gemini.generate_json(
-            api, model=model, instructions=retry_instructions(target_lang),
-            payload=json.dumps(payload, ensure_ascii=False), schema=SCHEMA,
+            api,
+            model=model,
+            instructions=retry_instructions(target_lang),
+            payload=json.dumps(payload, ensure_ascii=False),
+            schema=SCHEMA,
         )
         matched = [t for t in response["translations"] if t["id"] == unit["id"]]
         if not matched:
@@ -283,12 +319,20 @@ def translate_single(api, model: str, unit: dict, target_lang: str, attempts: in
     if gone:
         # Last resort: append the untranslated placeholder content so nothing is silently lost.
         translation = (translation + " " + " ".join(gone)).strip()
-        print(f"warning: {unit['id']} kept placeholder token(s) {gone} unmerged after retries", file=sys.stderr)
+        print(
+            f"warning: {unit['id']} kept placeholder token(s) {gone} unmerged after retries",
+            file=sys.stderr,
+        )
     return translation
 
 
 def translate_units(
-    units: list[dict], checkpoint_path: Path, *, model: str, batch_size: int, target_lang: str
+    units: list[dict],
+    checkpoint_path: Path,
+    *,
+    model: str,
+    batch_size: int,
+    target_lang: str,
 ) -> dict[str, str]:
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
     done = load_checkpoint(units, checkpoint_path, target_lang)
@@ -298,6 +342,7 @@ def translate_units(
     for start in range(0, len(pending), batch_size):
         batch = pending[start : start + batch_size]
         payload = [{"id": u["id"], "english": u["english"]} for u in batch]
+        assert api is not None
         response = gemini.generate_json(
             api,
             model=model,
@@ -306,17 +351,28 @@ def translate_units(
             schema=SCHEMA,
         )
         expected_ids = {u["id"] for u in batch}
-        translated = gemini.merge_invented_ids(expected_ids, response["translations"], "translation")
+        translated = gemini.merge_invented_ids(
+            expected_ids, response["translations"], "translation"
+        )
         received = {item["id"] for item in translated}
         by_result_id = {item["id"]: item["translation"].strip() for item in translated}
         for unit in batch:
             translation = by_result_id.get(unit["id"], "")
-            if unit["id"] not in received or not translation or missing_tokens(unit, translation):
+            if (
+                unit["id"] not in received
+                or not translation
+                or missing_tokens(unit, translation)
+            ):
                 translation = translate_single(api, model, unit, target_lang)
             done[unit["id"]] = translation
         save_checkpoint(checkpoint_path, units, done, target_lang)
-        print(f"translated {min(start + batch_size, len(pending))}/{len(pending)}", file=sys.stderr)
-    missing = [u["id"] for u in units if u["id"] not in done or not done[u["id"]].strip()]
+        print(
+            f"translated {min(start + batch_size, len(pending))}/{len(pending)}",
+            file=sys.stderr,
+        )
+    missing = [
+        u["id"] for u in units if u["id"] not in done or not done[u["id"]].strip()
+    ]
     if missing:
         raise ValueError(f"Missing translations for: {missing}")
     return done
@@ -333,7 +389,10 @@ def reconstruct(translated_text: str, placeholders: dict[str, str]) -> Beautiful
 
 
 def apply_translations(
-    soup: BeautifulSoup, units: list[dict], translations: dict[str, str], target_lang: str
+    soup: BeautifulSoup,
+    units: list[dict],
+    translations: dict[str, str],
+    target_lang: str,
 ) -> None:
     attrs = {"lang": target_lang, "dir": text_direction(target_lang)}
     for unit in units:
@@ -392,8 +451,14 @@ STYLE = """
 
 
 def build_bilingual_html(
-    html_text: str, output: Path, *, base_href: str | None, model: str, batch_size: int,
-    checkpoint: Path, target_lang: str = DEFAULT_LANG,
+    html_text: str,
+    output: Path,
+    *,
+    base_href: str | None,
+    model: str,
+    batch_size: int,
+    checkpoint: Path,
+    target_lang: str = DEFAULT_LANG,
 ) -> None:
     language_name(target_lang)  # fail fast on an unknown code, before any API call
     soup = BeautifulSoup(html_text, "html.parser")
@@ -406,14 +471,19 @@ def build_bilingual_html(
         base_tag = soup.new_tag("base", href=base_href)
         head.insert(0, base_tag)
     else:
-        print("warning: no base href determined; relative CSS/image links may not resolve", file=sys.stderr)
+        print(
+            "warning: no base href determined; relative CSS/image links may not resolve",
+            file=sys.stderr,
+        )
     style_tag = soup.new_tag("style")
     style_tag.string = STYLE
     head.append(style_tag)
 
     units = collect_units(soup)
     print(f"found {len(units)} translation units", file=sys.stderr)
-    translations = translate_units(units, checkpoint, model=model, batch_size=batch_size, target_lang=target_lang)
+    translations = translate_units(
+        units, checkpoint, model=model, batch_size=batch_size, target_lang=target_lang
+    )
     apply_translations(soup, units, translations, target_lang)
 
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -438,13 +508,30 @@ DESCRIPTION = (
 
 def add_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("source")
-    parser.add_argument("--output", type=Path, default=None, help="default: outputs/<slug>-<lang>-bilingual.html")
-    parser.add_argument("--checkpoint", type=Path, default=None, help="default: work/<slug>/<lang>/translations.json")
-    parser.add_argument("--base-href", default=None, help="override the auto-detected <base href> for relative assets")
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="default: outputs/<slug>-<lang>-bilingual.html",
+    )
+    parser.add_argument(
+        "--checkpoint",
+        type=Path,
+        default=None,
+        help="default: work/<slug>/<lang>/translations.json",
+    )
+    parser.add_argument(
+        "--base-href",
+        default=None,
+        help="override the auto-detected <base href> for relative assets",
+    )
     parser.add_argument("--model", default=gemini.DEFAULT_MODEL)
     parser.add_argument("--batch-size", type=int, default=12)
     parser.add_argument(
-        "--target-lang", default=DEFAULT_LANG, choices=sorted(LANGUAGES), metavar="CODE",
+        "--target-lang",
+        default=DEFAULT_LANG,
+        choices=sorted(LANGUAGES),
+        metavar="CODE",
         help=f"target language code (default {DEFAULT_LANG}); one of: {', '.join(sorted(LANGUAGES))}",
     )
 
@@ -454,8 +541,12 @@ def run(args: argparse.Namespace) -> None:
         html_text, slug, detected_base_href = resolve_source(args.source)
         default_output, default_checkpoint = default_paths(slug, args.target_lang)
         build_bilingual_html(
-            html_text, args.output or default_output, base_href=args.base_href or detected_base_href,
-            model=args.model, batch_size=args.batch_size, checkpoint=args.checkpoint or default_checkpoint,
+            html_text,
+            args.output or default_output,
+            base_href=args.base_href or detected_base_href,
+            model=args.model,
+            batch_size=args.batch_size,
+            checkpoint=args.checkpoint or default_checkpoint,
             target_lang=args.target_lang,
         )
     except ValueError as error:

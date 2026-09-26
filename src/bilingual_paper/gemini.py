@@ -35,8 +35,14 @@ def _is_transient(error: Exception) -> bool:
 
 
 def generate_json(
-    api: genai.Client, *, model: str, instructions: str, payload: str, schema: dict,
-    attempts: int = 4, backoff: float = 2.0,
+    api: genai.Client,
+    *,
+    model: str,
+    instructions: str,
+    payload: str,
+    schema: dict,
+    attempts: int = 4,
+    backoff: float = 2.0,
 ) -> dict:
     """Call the model and parse its JSON reply, retrying transient API errors and empty/invalid output.
 
@@ -58,15 +64,25 @@ def generate_json(
             if not response.text:
                 raise ValueError("model returned an empty response")
             return json.loads(response.text)
-        except (errors.APIError, ValueError) as error:  # json.JSONDecodeError is a ValueError
-            if attempt == attempts or (isinstance(error, errors.APIError) and not _is_transient(error)):
+        except (
+            errors.APIError,
+            ValueError,
+        ) as error:  # json.JSONDecodeError is a ValueError
+            if attempt == attempts or (
+                isinstance(error, errors.APIError) and not _is_transient(error)
+            ):
                 raise
-            print(f"warning: Gemini call failed ({error}); retrying ({attempt}/{attempts - 1})", file=sys.stderr)
+            print(
+                f"warning: Gemini call failed ({error}); retrying ({attempt}/{attempts - 1})",
+                file=sys.stderr,
+            )
             time.sleep(backoff * 2 ** (attempt - 1))
     raise AssertionError("unreachable")
 
 
-def merge_invented_ids(expected_ids: set[str], entries: list[dict], text_key: str) -> list[dict]:
+def merge_invented_ids(
+    expected_ids: set[str], entries: list[dict], text_key: str
+) -> list[dict]:
     """Fold entries for IDs the model invented back into the preceding expected entry.
 
     Small models occasionally split one input segment's response across two consecutive
@@ -80,5 +96,7 @@ def merge_invented_ids(expected_ids: set[str], entries: list[dict], text_key: st
         if entry["id"] in expected_ids:
             merged.append(dict(entry))
         elif merged:
-            merged[-1][text_key] = f"{merged[-1][text_key].rstrip()} {entry[text_key].strip()}".strip()
+            merged[-1][text_key] = (
+                f"{merged[-1][text_key].rstrip()} {entry[text_key].strip()}".strip()
+            )
     return merged
