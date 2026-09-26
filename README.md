@@ -2,6 +2,11 @@
 
 Bilingual (English + target language) HTML versions of arXiv HTML papers and PDF papers, translated with Gemini.
 
+Each paragraph, heading and caption of the original document is followed by its translation, with all original
+structure, CSS and MathML preserved:
+
+![Example bilingual HTML output, with each English paragraph followed by its Japanese translation](docs/images/example-bilingual-html.png)
+
 ## arXiv HTML papers
 
 `bilingual-paper arxiv` handles arXiv's own HTML papers (`https://arxiv.org/html/<id>`, LaTeXML output). Because
