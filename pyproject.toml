@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bilingual-paper"
+version = "0.1.0"
+description = "Bilingual (English + target language) HTML versions of papers from PDFs or arXiv HTML, translated with Gemini"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Keisuke Goto" }]
+dependencies = [
+    "beautifulsoup4>=4.15.0",
+    "google-genai>=2.22.0",
+    "pypdf>=5.0",
+]
+
+[project.scripts]
+bilingual-paper = "bilingual_paper.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
