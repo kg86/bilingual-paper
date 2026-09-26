@@ -82,26 +82,3 @@ def merge_invented_ids(expected_ids: set[str], entries: list[dict], text_key: st
         elif merged:
             merged[-1][text_key] = f"{merged[-1][text_key].rstrip()} {entry[text_key].strip()}".strip()
     return merged
-
-
-def run_with_single_fallback(batch: list, run, *, attempts: int = 3) -> list:
-    """Run `run(batch)`; if its result fails validation (ValueError), redo each item on its own.
-
-    A multi-segment request occasionally comes back with IDs dropped, duplicated, or emptied even
-    after `merge_invented_ids`; resending a single segment almost always fixes that without
-    aborting the whole run.
-    """
-    try:
-        return run(batch)
-    except ValueError as error:
-        print(f"warning: batch response rejected ({error}); retrying items individually", file=sys.stderr)
-    results: list = []
-    for item in batch:
-        for attempt in range(1, attempts + 1):
-            try:
-                results.extend(run([item]))
-                break
-            except ValueError:
-                if attempt == attempts:
-                    raise
-    return results

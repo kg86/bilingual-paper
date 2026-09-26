@@ -1,8 +1,7 @@
 # arXiv HTML 論文の英語+対訳 HTML 化 手順書
 
 対象: `https://arxiv.org/html/<arXiv ID>` で公開されている、LaTeXML 生成の arXiv HTML 論文。
-PDF ではなく、すでに構造化された HTML（MathML 入り）をそのまま使う。README.md の PDF パイプライン
-（`bilingual-paper inventory/clean/translate/render`）とは別系統で、`bilingual-paper arxiv` 1コマンドで完結する
+すでに構造化された HTML（MathML 入り）をそのまま使い、`bilingual-paper arxiv` 1コマンドで完結する
 （実装は `src/bilingual_paper/arxiv.py`）。
 
 ## できあがるもの
@@ -41,7 +40,7 @@ uv run bilingual-paper arxiv <SOURCE> [--output PATH] [--checkpoint PATH] [--mod
 ID/URL を渡した場合は `https://arxiv.org/html/<id>` を直接 fetch する（ブラウザでの事前ダウンロードは不要）。
 ローカルファイルを渡した場合は、ページ右上の透かし（`arXiv:2307.01412v4 [cs.DS] ...`）から ID を自動検出する
 （透かしが無ければ `<article>` より前の `arXiv:<id>` / `arxiv.org/abs/<id>` を探す。本文中で引用されている他論文の
-ID は拾わない）。arXiv に HTML 版が無い論文（404）はその旨のエラーになるので、PDF パイプラインを使う。
+ID は拾わない）。arXiv に HTML 版が無い論文（404）はその旨のエラーになる。
 
 出力先を省略すると:
 

@@ -1,8 +1,7 @@
 """`bilingual-paper arxiv`: build a bilingual (English/target-language) HTML page from an arXiv HTML paper.
 
-Unlike the PDF pipeline, the source here is already well-structured HTML (LaTeXML output),
-so paragraphs, headings and captions are extracted straight from the DOM -- including inline
-MathML -- instead of being reconstructed from PDF text-layer coordinates. Each translatable
+The source is already well-structured HTML (LaTeXML output), so paragraphs, headings and
+captions are extracted straight from the DOM, including inline MathML. Each translatable
 text unit is translated once via Gemini (with math/citations/reference-numbers protected as
 opaque placeholder tokens) and the translated result is inserted directly after its English
 counterpart in the original document, so all original structure/CSS/MathML is preserved.
@@ -63,7 +62,7 @@ def fetch_arxiv_html(arxiv_id: str) -> str:
         if error.code == 404:
             raise ValueError(
                 f"arXiv has no HTML version of {arxiv_id} ({url} returned 404). HTML is only generated for "
-                "papers arXiv could convert from LaTeX; use the PDF pipeline (bilingual-paper inventory/translate/...) instead."
+                "papers arXiv could convert from LaTeX; this tool cannot translate papers without one."
             ) from None
         raise
 
