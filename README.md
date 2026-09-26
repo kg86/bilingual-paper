@@ -1,6 +1,6 @@
 # bilingual-paper
 
-Bilingual (English + target language) HTML versions of arXiv HTML papers, translated with Gemini.
+Bilingual (English + target language) HTML versions of arXiv HTML papers and PDF papers, translated with Gemini.
 
 ## arXiv HTML papers
 
@@ -43,6 +43,24 @@ export GOOGLE_CLOUD_LOCATION=us-central1
 
 Transient Gemini errors (5xx/429, empty or unparseable replies) are retried with backoff, and a batch whose reply
 drops or duplicates IDs is redone one segment at a time.
+
+## PDF papers
+
+`bilingual-paper pdf` handles papers that have no arXiv HTML version. An external layout-analysis tool first converts the
+PDF to Markdown with LaTeX math ([MinerU](https://github.com/opendatalab/MinerU) by default, or
+[docling](https://github.com/docling-project/docling) with `--converter docling`); it recovers reading order across
+columns, paragraphs split by column/page breaks, lists, code, tables, figures and formulas. Each heading, paragraph and
+list item is then translated exactly like an arXiv page, and formulas are typeset with MathJax.
+
+```bash
+uv tool install "mineru[core]"   # or: uv tool install docling
+uv run bilingual-paper pdf path/to/paper.pdf --target-lang ja
+```
+
+The converter's Markdown is cached in `work/<slug>/<converter>/` (`--reconvert` to redo it), and `--converter-arg`
+passes extra options through (e.g. `--converter-arg=--ocr-mode --converter-arg=ocr` for a scanned PDF). Prefer
+`bilingual-paper arxiv` when the paper has an arXiv HTML version: its math and tables are exact, while a PDF converter's
+formula recognition can add stray symbols. See `docs/pdf-bilingual-html.md` for details and known limitations.
 
 ## License
 

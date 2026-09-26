@@ -16,6 +16,7 @@ import re
 import sys
 import urllib.error
 import urllib.request
+from collections.abc import Callable
 from html import escape
 from pathlib import Path
 
@@ -119,7 +120,9 @@ def strip_ids(tag: Tag) -> str:
     return str(clone)
 
 
-def extract_segment(tag: Tag) -> tuple[str, dict[str, str]]:
+def extract_segment(
+    tag: Tag, opaque: Callable[[Tag], bool] = is_opaque
+) -> tuple[str, dict[str, str]]:
     placeholders: dict[str, str] = {}
     counter = [0]
 
@@ -128,7 +131,7 @@ def extract_segment(tag: Tag) -> tuple[str, dict[str, str]]:
         for child in node.children:
             if isinstance(child, NavigableString):
                 parts.append(str(child))
-            elif is_opaque(child):
+            elif opaque(child):
                 token = f"@@{counter[0]}@@"
                 counter[0] += 1
                 placeholders[token] = strip_ids(child)
@@ -407,7 +410,10 @@ def apply_translations(
             tag_name = "p"
         new_tag = soup.new_tag(tag_name, attrs={"class": unit["css_class"], **attrs})
         new_tag.append(fragment)
-        anchor.insert_after(new_tag)
+        if anchor.name == "li":
+            anchor.append(new_tag)  # a <p> between <li>s would be invalid list markup
+        else:
+            anchor.insert_after(new_tag)
 
 
 STYLE = """
