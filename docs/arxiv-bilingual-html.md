@@ -1,128 +1,143 @@
-# arXiv HTML 論文の英語+対訳 HTML 化 手順書
+# Procedure: bilingual HTML for arXiv HTML papers
 
-対象: `https://arxiv.org/html/<arXiv ID>` で公開されている、LaTeXML 生成の arXiv HTML 論文。
-すでに構造化された HTML（MathML 入り）をそのまま使い、`bilingual-paper arxiv` 1コマンドで完結する
-（実装は `src/bilingual_paper/arxiv.py`）。
+Target: arXiv HTML papers published at `https://arxiv.org/html/<arXiv ID>` (LaTeXML output). Since the source
+is already structured HTML (with inline MathML), a single `bilingual-paper arxiv` command handles the whole
+pipeline (implementation: `src/bilingual_paper/arxiv.py`).
 
-## できあがるもの
+## What you get
 
-元の arXiv HTML ページの DOM 構造・CSS・MathML・図表・脚注リンクをすべてそのまま残し、
-各段落・見出し・図表キャプションの直後に、対応する翻訳（既定は日本語、`--target-lang` で変更可）を
-差し込んだ 1 つの HTML ファイル。数式・引用番号・相互参照リンク（例: "Section 3", "[5]", "Table 1"）は
-原文のまま複製されるので、翻訳側でも数式や参照リンクがそのまま機能する。
+A single HTML file that keeps the original arXiv page's DOM structure, CSS, MathML, figures and footnote links
+completely intact, with the matching translation (default Japanese, changeable with `--target-lang`) inserted
+right after each paragraph, heading and figure/table caption. Formulas, citation numbers and cross-reference
+links (e.g. "Section 3", "[5]", "Table 1") are duplicated verbatim, so formulas and reference links keep working
+on the translated side too.
 
-## 前提
+## Prerequisites
 
 ```bash
 uv sync
-gcloud auth application-default login   # 初回のみ
-export GOOGLE_CLOUD_PROJECT=<GCPプロジェクトID>   # gcloud config get-value project で確認可
+gcloud auth application-default login   # once
+export GOOGLE_CLOUD_PROJECT=<your-gcp-project>   # check with `gcloud config get-value project`
 ```
 
-Gemini 呼び出しは Vertex AI 経由（API キー不要、ADC 認証）。`GOOGLE_CLOUD_LOCATION` は省略可（既定 `global`）。
+Gemini is called through Vertex AI (no API key needed, ADC auth). `GOOGLE_CLOUD_LOCATION` is optional (defaults
+to `global`).
 
-## 実行
+## Running it
 
 ```bash
 uv run bilingual-paper arxiv <SOURCE> [--output PATH] [--checkpoint PATH] [--model MODEL] [--base-href URL] [--target-lang CODE]
 ```
 
-`--target-lang` は既定 `ja`（日本語）。`ko`（韓国語）、`zh-Hans`（簡体字中国語）、`zh-Hant`（繁体字中国語）など
-`src/bilingual_paper/languages.py` の `LANGUAGES` に載っている言語コードを指定できる（それ以外はその場でエラー）。チャットからの依頼で
-実行する場合は、ユーザーの指示文の言語から対象言語を推定して渡すこと（例: 韓国語で依頼されたら `--target-lang ko`）。
+`--target-lang` defaults to `ja` (Japanese). You can pass any code listed in `LANGUAGES` in
+`src/bilingual_paper/languages.py` (`ko` Korean, `zh-Hans` Simplified Chinese, `zh-Hant` Traditional Chinese,
+etc.) — anything else errors immediately. When running this from a chat request, infer the target language from
+the language of the user's instruction (e.g. a Korean request implies `--target-lang ko`).
 
-`SOURCE` には次のいずれかを渡せる。すべて内部で同じ処理に正規化される。
+`SOURCE` accepts any of the following; all are normalized to the same handling internally.
 
-- 裸の arXiv ID: `2307.01412` / `2307.01412v4`
-- arXiv の URL: `https://arxiv.org/abs/2307.01412`、`/pdf/...`、`/html/...` のどれでも可
-- ローカルに保存済みの arXiv HTML ファイルのパス（ブラウザで Save As したものなど）
+- A bare arXiv ID: `2307.01412` / `2307.01412v4`
+- An arXiv URL: `https://arxiv.org/abs/2307.01412`, `/pdf/...`, or `/html/...`
+- The path to a locally saved arXiv HTML file (e.g. saved from a browser via Save As)
 
-ID/URL を渡した場合は `https://arxiv.org/html/<id>` を直接 fetch する（ブラウザでの事前ダウンロードは不要）。
-ローカルファイルを渡した場合は、ページ右上の透かし（`arXiv:2307.01412v4 [cs.DS] ...`）から ID を自動検出する
-（透かしが無ければ `<article>` より前の `arXiv:<id>` / `arxiv.org/abs/<id>` を探す。本文中で引用されている他論文の
-ID は拾わない）。arXiv に HTML 版が無い論文（404）はその旨のエラーになる。
+For an ID/URL, `https://arxiv.org/html/<id>` is fetched directly (no need to download it via a browser first).
+For a local file, the ID is auto-detected from the watermark in the page's top-right corner
+(`arXiv:2307.01412v4 [cs.DS] ...`); if there's no watermark, it looks for an `arXiv:<id>` / `arxiv.org/abs/<id>`
+string appearing before `<article>` (it won't pick up IDs of other papers cited in the body). A paper with no
+arXiv HTML version (404) produces an error saying so.
 
-出力先を省略すると:
+If output paths are omitted:
 
-- 本体: `outputs/<slug>-<lang>-bilingual.html`
-- 翻訳チェックポイント: `work/<slug>/<lang>/translations.json`
+- Main output: `outputs/<slug>-<lang>-bilingual.html`
+- Translation checkpoint: `work/<slug>/<lang>/translations.json`
 
-（`<slug>` は検出できた arXiv ID、検出できなければローカルファイル名。`<lang>` は `--target-lang`）
+(`<slug>` is the detected arXiv ID, or the local filename if none was detected. `<lang>` is `--target-lang`.)
 
-どちらも言語ごとに分かれるので、同じ論文を別の言語で訳し直しても上書きや訳の混入は起きない。
+Both are split per language, so re-translating the same paper into a different language never overwrites or
+mixes in the other language's translations.
 
-進捗はバッチ単位（既定 12 件）でチェックポイントに保存されるので、API エラー等で中断しても再実行すれば
-翻訳済み分はスキップされ、途中から再開できる。チェックポイントには対象言語と各ユニットの英文が記録されており、
+Progress is saved to the checkpoint per batch (12 units by default), so if a run is interrupted (e.g. by an API
+error) re-running it skips already-translated units and resumes from where it left off. The checkpoint records
+the target language and each unit's English text, so:
 
-- 言語が `--target-lang` と違うチェックポイントを渡すとエラーになる。
-- 論文の改版などで英文が変わったユニットは、古い訳を使わずに訳し直す。
-- 旧形式（言語・英文を記録していない）のチェックポイントはエラーになるので、削除してやり直す。
+- Passing a checkpoint whose language differs from `--target-lang` is an error.
+- If a paper's English text changed (e.g. a new revision), the affected unit is retranslated rather than reusing
+  the stale translation.
+- An old-format checkpoint (one that doesn't record language/English text) errors out; delete it and start over.
 
-Gemini の一時的なエラー（5xx/429、空応答や JSON 不正）はバックオフ付きで自動リトライする。
+Transient Gemini errors (5xx/429, empty or malformed replies) are retried automatically with backoff.
 
-### モデル選択
+### Choosing a model
 
-既定は `gemini-flash-lite-latest`（`bilingual_paper.gemini.DEFAULT_MODEL`）だが、数式や参照が密集した文が
-多い論文では軽量モデルだとプレースホルダ（後述）を取りこぼしやすい。品質重視なら `--model gemini-2.5-flash`
-を推奨する（実績: 2307.01412 で完走、警告 0 件）。
+The default is `gemini-flash-lite-latest` (`bilingual_paper.gemini.DEFAULT_MODEL`), but for papers dense with
+formulas and references, the lightweight model is more prone to dropping placeholders (see below). For quality,
+`--model gemini-2.5-flash` is recommended (verified: completed 2307.01412 with zero warnings).
 
 ```bash
 uv run bilingual-paper arxiv 2307.01412 --model gemini-2.5-flash
 ```
 
-## 内部の仕組み（トラブル時に読む）
+## How it works internally (read this when troubleshooting)
 
-`src/bilingual_paper/arxiv.py` は次の順で処理する。
+`src/bilingual_paper/arxiv.py` processes things in this order:
 
-1. **`resolve_source`**: SOURCE を解決して HTML テキストと `<base href>` を決める。
-   arXiv 由来なら `<base href="https://arxiv.org/html/">` を付与する。これにより、ページ内の
-   相対パス（`/static/...` の CSS、`2307.01412v4/xxx.png` のような図版）が実際の arXiv 上のパスに
-   解決され、ブラウザで開いたときにスタイルと画像が正しく表示される（起点ページ自体には `<base>`
-   が無いため、これをしないと保存直後の HTML はレイアウト崩れ・画像欠落を起こす）。
-2. **`collect_units`**: `<article>` 内から翻訳対象を DOM 順に収集する。対象は
-   タイトル (`h1`)・見出し (`h2`–`h4`)・abstract 直下の段落・各 `div.ltx_para` の直下の `p.ltx_p`
-   （箇条書きや定理を包む `ltx_para` の導入文も含む。入れ子の項目はそれぞれの `ltx_para` 側で1回だけ拾う）・
-   `figcaption`・脚注本文 (`span.ltx_note_content`)。参考文献一覧 (`ltx_bibliography`) は対象外
-   （書誌情報は翻訳しない）。
-3. **`extract_segment`**: 各ユニットのテキストを取り出す際、数式 (`<math>`)・引用 (`<cite>`)・
-   参照リンク (`<a class="ltx_ref">`)・番号タグ (`class` に `ltx_tag` を含む要素、例: 節番号や
-   "Theorem 1." の見出し番号)・脚注 (`ltx_note`、脚注番号 `ltx_note_mark`) は "不透明" として扱い、`@@0@@`, `@@1@@`, ... という ASCII
-   プレースホルダトークンに置き換える（元の HTML 断片は保持し、`id` 属性だけ除去してコピー先での
-   ID 重複を防ぐ）。それ以外のテキスト（`em` など）は素のテキストとして残す。
-4. Gemini にはプレースホルダを含む平文を渡し、「トークンを一字一句変えずに、対象言語として自然な位置に
-   そのまま残して訳せ」という指示を与える（`build_instructions(target_lang)` が言語名を埋め込む）。
-   IDのすり合わせ (`merge_invented_ids`) と、プレースホルダの欠落チェック (`missing_tokens`) を行い、
-   欠落があれば同じユニットだけを個別に再送信（最大3回、より強い指示文で）。それでも欠落する場合は、
-   失われるより見た目が悪い方がマシという判断で、欠けたプレースホルダの中身をそのまま文末に追記する
-   フォールバックを行う（その際 stderr に warning を出す）。見出し (`tr-heading`) と脚注本文 (`tr-note`)
-   だけは、節番号・脚注番号プレースホルダの欠落を許容する（すぐ上の英語側に番号が出ているため実害がない）。
-5. **`reconstruct`**: 翻訳結果の `@@N@@` を、対応する元 HTML 断片に戻して翻訳側の HTML 断片を作る。
-6. **`apply_translations`**: 各ユニットの直後 (`insert_after`) に、`class="tr-para"` /
-   `"tr-heading"` / `"tr-caption"` / `"tr-note"` と `lang="<target_lang>"`・`dir`（アラビア語は `rtl`）を
-   付けた新しい要素として翻訳を挿入する。元の英語要素は一切変更しない。フォントは `:lang()` で言語ごとに
-   切り替える（中国語が日本語の字形で表示されないようにするため）。
+1. **`resolve_source`**: Resolves SOURCE into HTML text and a `<base href>`. For arXiv-sourced input, it adds
+   `<base href="https://arxiv.org/html/">`. This makes relative paths in the page (CSS under `/static/...`,
+   figures like `2307.01412v4/xxx.png`) resolve to their real arXiv paths, so styles and images render correctly
+   when the file is opened in a browser (the original page itself has no `<base>`, so without this the saved
+   HTML would immediately have broken layout and missing images).
+2. **`collect_units`**: Collects translation targets from inside `<article>`, in DOM order. Targets are: the
+   title (`h1`), headings (`h2`–`h4`), paragraphs directly under the abstract, each `p.ltx_p` directly under a
+   `div.ltx_para` (including the lead-in text of an `ltx_para` that wraps a list or theorem; nested items are
+   each only picked up once, via their own `ltx_para`), `figcaption`, and footnote bodies
+   (`span.ltx_note_content`). The bibliography (`ltx_bibliography`) is excluded (reference entries aren't
+   translated).
+3. **`extract_segment`**: When extracting each unit's text, formulas (`<math>`), citations (`<cite>`), reference
+   links (`<a class="ltx_ref">`), numbering tags (elements whose `class` contains `ltx_tag`, e.g. section numbers
+   or the "Theorem 1." heading number), and footnotes (`ltx_note`, footnote marker `ltx_note_mark`) are treated
+   as "opaque" and replaced with ASCII placeholder tokens `@@0@@`, `@@1@@`, ... (the original HTML fragment is
+   kept, with only its `id` attribute stripped to avoid ID collisions at the copy destination). Other text (e.g.
+   `em`) is left as plain text.
+4. Gemini receives the plain text with placeholders and an instruction to translate it while keeping the tokens
+   exactly as-is, placed wherever they'd naturally fall in the target language
+   (`build_instructions(target_lang)` fills in the language name). ID reconciliation
+   (`merge_invented_ids`) and a check for missing placeholders (`missing_tokens`) follow; if any are missing,
+   just that unit is resent individually (up to 3 times, with a stronger instruction each time). If it's still
+   missing after that, the tool falls back to appending the missing placeholder's content verbatim at the end of
+   the translation — on the judgment that this looks worse but is better than silently losing content (a warning
+   is printed to stderr). Headings (`tr-heading`) and footnote bodies (`tr-note`) are the only exceptions that
+   tolerate missing section-number/footnote-number placeholders, since the number already appears right above in
+   the English text, so there's no real harm.
+5. **`reconstruct`**: Substitutes each `@@N@@` in the translated text back with its corresponding original HTML
+   fragment, producing the translated side's HTML fragment.
+6. **`apply_translations`**: Inserts the translation right after each unit (`insert_after`) as a new element with
+   `class="tr-para"` / `"tr-heading"` / `"tr-caption"` / `"tr-note"`, `lang="<target_lang>"`, and `dir` (`rtl`
+   for Arabic). The original English element is never modified. Fonts are switched per language via `:lang()`
+   (so Chinese text doesn't render with Japanese glyph shapes).
 
-## 検証手順（毎回やること）
+## Verification steps (do these every time)
 
-1. コマンド実行後、stderr に `warning: ... kept placeholder token(s) ... unmerged` が出ていないか確認する。
-   出ていたら該当ユニットを `work/<slug>/<lang>/translations.json` で探し、目視で許容できるか確認する。
-2. ローカルで簡易サーバを立てて Chrome で開き、見た目を確認する（`file://` は拡張機能から開けないため
-   簡易サーバ経由にする）。
+1. After running the command, check stderr for `warning: ... kept placeholder token(s) ... unmerged`. If it
+   appears, look up the affected unit in `work/<slug>/<lang>/translations.json` and visually judge whether it's
+   acceptable.
+2. Start a local server and open the file in Chrome to check the rendering (`file://` can't be opened from
+   extensions, so go through a local server).
 
    ```bash
    cd outputs && uv run python -m http.server 8791
-   # 別タブで claude-in-chrome から http://localhost:8791/<slug>-<lang>-bilingual.html を開く
+   # in another tab, open http://localhost:8791/<slug>-<lang>-bilingual.html from claude-in-chrome
    ```
 
-   確認ポイント: タイトル/見出しの直下に訳文が出ているか、数式がレンダリングされているか、
-   図版の画像が表示されているか（`<base>` が効いているか）、引用 `[n]` や "Section n" のリンクが
-   クリックできる状態のままか。
-3. 確認後、簡易サーバは `pkill -f "http.server 8791"` などで止める。
+   Things to check: does the translation appear right below the title/heading, are formulas rendered, do figure
+   images show up (is `<base>` working), and are citation `[n]` and "Section n" links still clickable.
+3. After checking, stop the local server, e.g. with `pkill -f "http.server 8791"`.
 
-## 既知の制約
+## Known limitations
 
-- 参考文献一覧（Bibliography）は翻訳しない。
-- 脚注本文は訳文を英語の脚注本文の直後に差し込む。段落の訳文側に複製される脚注（プレースホルダ経由）は
-  英語のまま。実際の脚注付き論文での見た目は未検証なので、初回は目視確認すること。
-- `<base href>` は「`https://arxiv.org/html/`」固定でよい（画像パスがバージョン付きディレクトリを
-  自己完結して含むため）。バージョン違いや将来の arXiv 側のパス変更で崩れる場合は `--base-href` で上書きする。
+- The bibliography is not translated.
+- Footnote body translations are inserted right after the English footnote body. Footnotes duplicated on the
+  translated paragraph side (via placeholders) stay in English. This hasn't been verified on a real paper with
+  footnotes, so check it visually the first time.
+- `<base href>` is hardcoded to `https://arxiv.org/html/` (image paths are self-contained, including the
+  versioned directory). If this breaks for a different version or a future arXiv path change, override it with
+  `--base-href`.
